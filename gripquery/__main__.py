@@ -13,6 +13,8 @@ import dash_bootstrap_components as dbc
 from dash.dependencies import Input, Output, State, MATCH, ALL
 from flask import Flask, send_from_directory
 
+from gripquery.render import parsePartialQuery, schemaGraphColor
+
 import dash_cytoscape as cyto
 
 external_stylesheets = ['https://codepen.io/chriddyp/pen/bWLwgP.css', dbc.themes.BOOTSTRAP]
@@ -28,17 +30,31 @@ CRED=None
 
 GRAPHS = []
 
+
+base_cyto_stylesheet = [
+     {
+        'selector': 'node',
+        'style': {
+            'content': 'data(label)'
+        }
+    },
+    {
+        'selector': '.red',
+        'style': {
+            'background-color': 'red',
+            'line-color': 'red'
+        }
+    }
+]
+
 def schemaGraph():
     return html.Div([
         cyto.Cytoscape(
-            id='cytoscape-two-nodes',
-            layout={'name': 'preset'},
+            id='schema-graph',
+            layout={'name': 'cose'},
+            stylesheet=base_cyto_stylesheet,
             style={'width': '100%', 'height': '400px'},
-            elements=[
-                {'data': {'id': 'one', 'label': 'Node 1'}, 'position': {'x': 75, 'y': 75}},
-                {'data': {'id': 'two', 'label': 'Node 2'}, 'position': {'x': 200, 'y': 200}},
-                {'data': {'source': 'one', 'target': 'two'}}
-            ]
+            elements=[]
         )
     ])
 
@@ -96,12 +112,11 @@ def app_setup():
     GRAPHS = []
     for i in conn.listGraphs():
         GRAPHS.append(i)
-    
+
     dialog =  dcc.Input(
-        id="grip-query",
+        id="query-text",
         type="text",
         size="120",
-        debounce=True,
     )
 
     app.layout = html.Div([
@@ -113,13 +128,14 @@ def app_setup():
             value=GRAPHS[0]
         )),
         html.Div(dialog),
-        html.Div(id="query-text"),
         html.Button('Run Query', id='submit-val', n_clicks=0),
-        #schemaGraph(),
+        dcc.Store(id='schema-store'),
+        html.Button('Show Schema', id='show-schema', n_clicks=0),
+        schemaGraph(),
         #html.Div(id="query-parsed"),
         html.Div(id="query-results"),
     ])
-    
+
 def results_columns(results):
     c = set()
     for row in results:
@@ -145,7 +161,7 @@ def query_viewer(graph, query, num):
     q.credential_file = CRED
     q.url = GRIP + "/v1/graph/" + graph + "/query"
     results = list(q.limit(10))
-    
+
     columns = results_columns(results)
     data = results_data(results)
 
@@ -154,7 +170,7 @@ def query_viewer(graph, query, num):
         columns=columns,
         data=data,
     )
-    
+
     card = dbc.Card(
         [
             #dbc.CardImg(src="/static/images/placeholder286x180.png", top=True),
@@ -181,11 +197,73 @@ def query_viewer(graph, query, num):
     )
     return card
 
+@app.callback(
+    Output('schema-graph', 'style'),
+    [Input('show-schema', 'n_clicks')])
+def toggle_container(toggle_value):
+    #print(toggle_value, flush=True)
+    if toggle_value % 2 == 0:
+        return {'display': 'block', 'width': '100%', 'height': '400px'}
+    else:
+        return {'display': 'none'}
+
+@app.callback(
+    Output('schema-graph', 'elements'),
+    [Input('schema-store', 'data')]
+)
+def schema_render(schema):
+    o = []
+    if 'vertices' in schema:
+        for i in schema['vertices']:
+            t = {"data": {"id":i['gid'], "label": i['gid']}}
+            o.append(t)
+    if 'edges' in schema:
+        for i in schema['edges']:
+            t = {"data":{"source":i['from'], "target":i['to']}}
+            o.append(t)
+    return o
+
+@app.callback(
+    Output('schema-graph', 'stylesheet'),
+    [Input('query-text', 'value'), Input('schema-store', 'data')]
+)
+def schema_style(query, schema):
+    q = parsePartialQuery(query)
+    colored = schemaGraphColor(schema, q)
+    o = []
+    for i in base_cyto_stylesheet:
+        o.append(i)
+    for c in colored:
+        o.append({
+            'selector': "[id = '%s']" % (c),
+            'style': {
+                'content': 'data(label)',
+                'background-color': 'blue',
+            }
+        })
+    return o
+
+@app.callback(
+    Output('schema-store', 'data'),
+    [Input('query-graph', 'value')]
+)
+def schema_load(graph):
+    G = gripql.Graph(GRIP, credential_file=CRED, graph=graph)
+    schema = G.getSchema()
+    o = {'vertices' : [], 'edges' : []}
+    if 'vertices' in schema:
+        for i in schema['vertices']:
+            o['vertices'].append({"gid":i["gid"], "label":i["label"]})
+    if 'edges' in schema:
+        for i in schema['edges']:
+            o['edges'].append({"from":i["from"], "to":i['to'], "label":i["label"]})
+    return o
+
 
 @app.callback(
     Output('query-results', 'children'),
     [Input('submit-val', 'n_clicks'), Input({'type': 'result-card-delete', 'index': ALL}, 'n_clicks')],
-    [Input('query-graph', 'value'), State('grip-query', 'value'), State('query-results', 'children') ])
+    [Input('query-graph', 'value'), State('query-text', 'value'), State('query-results', 'children') ])
 def update_output(n_clicks, result_delete, graph, query, results):
     ctx = dash.callback_context
     if not ctx.triggered:
@@ -207,7 +285,6 @@ def update_output(n_clicks, result_delete, graph, query, results):
             button_data = json.loads(button_id)
             o = []
             for i in results:
-                print(i)
                 if i["props"]['id']['index'] != button_data['index']:
                     o.append(i)
             results = o
@@ -219,8 +296,8 @@ if __name__ == '__main__':
     parser.add_argument("--host", default=HOST)
     parser.add_argument("-p", "--port", default=PORT)
     parser.add_argument("-g", "--grip", default=GRIP)
-    parser.add_argument("-c", "--cred", default=CRED)    
-    
+    parser.add_argument("-c", "--cred", default=CRED)
+
     args = parser.parse_args()
     HOST = args.host
     PORT = args.port
