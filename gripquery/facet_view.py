@@ -135,11 +135,11 @@ def update_view(data):
     [
         Input("facet-graph", "value"),
         Input("facet-label", "value"),
-        Input("facet-store", "data"),
-        Input({"type": "facet-selector", "index":ALL}, "value")        
-    ]
+        Input({"type": "facet-selector", "index":ALL}, "value")
+    ],
+    [State("facet-store", "data"),]
 )
-def update_table(graph, label, facets, facet_inputs):
+def update_table(graph, label, facet_inputs, facets):
     if graph is not None and label is not None:
         conn = connect()
         G = conn.graph(graph)
@@ -149,7 +149,7 @@ def update_table(graph, label, facets, facet_inputs):
                 fi = facet_inputs[f['index']]
                 if len(fi):
                     q = q.has(gripql.within(k, fi))
-                data = results_data(q)
+        data = results_data(q)
         return data
     return []
 
