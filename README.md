@@ -46,6 +46,9 @@ python -m gripquery
 The web UI should now be avalible at http://localhost:8050
 
 # Connecting to BMEG.io server
+
+## NOTE: grip-query is dependent on updates to Grip 0.7.0, and many functions won't work until bmeg.io is updated
+
 To connect server against BMEG.io, get `bmeg_credentials.json` file from [BMEG](https://bmeg.io/analyze/access)
 
 Start server with command
