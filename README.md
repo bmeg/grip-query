@@ -10,6 +10,13 @@
 grip server
 ```
 
+## Load example graph
+Grip command line will create a small graph, based on Star Wars, and store it in
+`example-graph`.
+```
+grip load example-graph
+```
+
 ## Setting up example GDC graph
 
 Download GDC data

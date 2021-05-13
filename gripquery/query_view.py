@@ -1,10 +1,13 @@
 
+import json
 from .app import app
 import dash_bootstrap_components as dbc
 from dash.dependencies import Input, Output, State, MATCH, ALL
 import dash_core_components as dcc
 import dash_html_components as html
 import dash_cytoscape as cyto
+import dash_table
+
 from gripquery.render import parsePartialQuery, schemaGraphColor
 import dash
 import gripql
@@ -204,8 +207,11 @@ def schema_style(query, schema):
 )
 def schema_load(graph):
     G = gripql.Graph(GRIP, credential_file=CRED, graph=graph)
-    schema = G.getSchema()
     o = {'vertices' : [], 'edges' : []}
+    try:
+        schema = G.getSchema()
+    except:
+        schema = {}
     if 'vertices' in schema:
         for i in schema['vertices']:
             o['vertices'].append({"gid":i["gid"], "label":i["label"]})

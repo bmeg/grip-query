@@ -16,3 +16,4 @@ app = dash.Dash(__name__, server=server,
         }
     ]
 )
+app.config.suppress_callback_exceptions = True

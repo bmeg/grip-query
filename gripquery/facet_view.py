@@ -31,6 +31,14 @@ def setup(graphs):
                     id='facet-table',
                     columns=[],
                     data=[],
+                    style_cell={
+                        'whiteSpace': 'normal',
+                        'height': 'auto',
+                        'overflowX': 'auto'
+                    },
+                    page_action="native",
+                    page_current= 0,
+                    page_size= 50,
                 ),
                 id="facet-table-div",
                 style={

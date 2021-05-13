@@ -58,20 +58,18 @@ sidebar_header = dbc.Row(
 )
 
 def genNavBarList():
-    i = 0
     out = []
     for k, v in [ ("query","Query"), ("facet","Facet View") ]:
         e = dbc.NavLink(
             v,
             href="/%s" % (k),
-            id="page-%d-link" % (i),
+            id="page-%s-link" % (k),
             style={
                 'font-size': format_style('font_size_lg'),
                 'fontFamily': format_style('font')
             }
         )
         out.append(e)
-        i += 1
     return out
 
 
@@ -108,13 +106,7 @@ sidebar = html.Div(
 
 
 def app_setup():
-    c = gripql.Connection(conn.GRIP, credential_file=conn.CRED)
-    graphs = []
-    for i in c.listGraphs():
-        if not i.endswith("__schema__"):
-            graphs.append(i)
-
-    content = html.Div(facet_view.setup(graphs), id="page-content")
+    content = html.Div(id="page-content")
     app.layout = html.Div([dcc.Location(id="url"), sidebar, content])
 
 
@@ -124,6 +116,27 @@ def app_setup():
     #    "height" : "100%",
     #    "width" : "100%"
     #})
+
+@app.callback(Output("page-content", "children"), [Input("url", "pathname")])
+def render_page_content(pathname):
+    c = gripql.Connection(conn.GRIP, credential_file=conn.CRED)
+    graphs = []
+    for i in c.listGraphs():
+        if not i.endswith("__schema__"):
+            graphs.append(i)
+
+    if pathname == "/" or pathname == "/query":
+        return query_view.setup(graphs)
+    elif pathname == "/facet":
+        return facet_view.setup(graphs)
+
+    return dbc.Jumbotron(
+        [
+            html.H1("404: Not found", className="text-danger"),
+            html.Hr(),
+            html.P(f"The pathname {pathname} was not recognised..."),
+        ]
+    )
 
 
 
