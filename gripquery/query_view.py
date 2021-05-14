@@ -29,21 +29,72 @@ base_cyto_stylesheet = [
     }
 ]
 
+schema_holder_style = {
+    "position": "fixed",
+    "top": 0,
+    "right": 0,
+    "bottom": 0,
+    "width": "300px",
+    "padding": "2rem 1rem",
+    "background-color": "#f8f9fa",
+}
+
 def schemaGraph():
     return html.Div([
         cyto.Cytoscape(
             id='schema-graph',
             layout={'name': 'cose'},
             stylesheet=base_cyto_stylesheet,
-            style={'width': '100%', 'height': '400px'},
+            style={'width': '100%', 'height': '100%'},
             elements=[]
-        )
-    ])
+        )],
+        style=schema_holder_style,
+        id="schema-holder"
+    )
+
+class gripStub:
+    def and_(self, *args, **kwargs):
+        return gripql.and_(*args, **kwargs)
+    def or_(self, *args, **kwargs):
+        return gripql.or_(*args, **kwargs)
+    def not_(self, *args, **kwargs):
+        return gripql.not_(*args, **kwargs)
+    def eq(self, *args, **kwargs):
+        return gripql.eq(*args, **kwargs)
+    def neq(self, *args, **kwargs):
+        return gripql.neq(*args, **kwargs)
+    def gt(self, *args, **kwargs):
+        return gripql.gt(*args, **kwargs)
+    def gte(self, *args, **kwargs):
+        return gripql.gte(*args, **kwargs)
+    def lt(self, *args, **kwargs):
+        return gripql.lt(*args, **kwargs)
+    def lte(self, *args, **kwargs):
+        return gripql.lte(*args, **kwargs)
+    def inside(self, *args, **kwargs):
+        return gripql.inside(*args, **kwargs)
+    def outside(self, *args, **kwargs):
+        return gripql.outside(*args, **kwargs)
+    def between(self, *args, **kwargs):
+        return gripql.between(*args, **kwargs)
+    def within(self, *args, **kwargs):
+        return gripql.within(*args, **kwargs)
+    def without(self, *args, **kwargs):
+        return gripql.without(*args, **kwargs)
+    def contains(self, *args, **kwargs):
+        return gripql.contains(*args, **kwargs)
+    def term(self, *args, **kwargs):
+        return gripql.term(*args, **kwargs)
+    def histogram(self, *args, **kwargs):
+        return gripql.histogram(*args, **kwargs)
+    def percentil(self, *args, **kwargs):
+        return gripql.percentil(*args, **kwargs)
 
 def query_validate(text):
     try:
-        out = eval(str(text), {"V": gripql.query.Query(url="", graph="test").V}, {})
-    except:
+        out = eval(str(text), {"V": gripql.query.Query(url="", graph="test").V, "gripql" : gripStub()}, {})
+    except Exception as e:
+        print(e)
         return False
     if isinstance(out, gripql.query.Query):
         return True
@@ -51,7 +102,7 @@ def query_validate(text):
 
 def query_parse(text):
     try:
-        out = eval(str(text), {"V": gripql.query.Query(url="", graph="test").V}, {})
+        out = eval(str(text), {"V": gripql.query.Query(url="", graph="test").V, "gripql" : gripStub()}, {})
     except:
         return None
     if isinstance(out, gripql.query.Query):
@@ -75,16 +126,19 @@ def setup(graphs):
         id="query-text",
         type="text",
         size="120",
+        style={'fontSize':20}
     )
 
     return html.Div([
-        html.Div(
-            dcc.Dropdown(
-            id='query-graph',
-            options=list( {"label":i, "value":i} for i in graphs ),
-            value=graphs[0]
-        )),
-        html.Div(dialog),
+        dbc.Row([
+            dbc.Col(
+                dcc.Dropdown(
+                id='query-graph',
+                options=list( {"label":i, "value":i} for i in graphs ),
+                value=graphs[0]
+            ), width=1),
+            dbc.Col(html.Div(dialog))
+        ]),
         html.Button('Run Query', id='submit-val', n_clicks=0),
         dcc.Store(id='schema-store'),
         html.Button('Show Schema', id='show-schema', n_clicks=0),
@@ -97,18 +151,25 @@ def setup(graphs):
 def results_columns(results):
     c = set()
     for row in results:
-        if 'label' in row and 'data' in row:
-            c.update(list(row['data'].keys()))
+        if 'vertex' in row:
+            if 'data' in row['vertex']:
+                c.update(list(row['vertex']['data'].keys()))
+        elif 'render' in row:
+            if isinstance(row['render'], dict):
+                c.update(list(row['render'].keys()))
+        else:
+            print("Unknown type")
     return list( {"name":i, "id": i} for i in c )
 
 def results_data(results):
     out = []
     for row in results:
-        if 'label' in row and 'data' in row:
-            r = {}
-            for k, v in row['data'].items():
-                r[k] = str(v)
-            out.append(r)
+        if 'vertex' in row:
+            if 'data' in row['vertex']:
+                r = {}
+                for k, v in row['vertex']['data'].items():
+                    r[k] = str(v)
+                out.append(r)
     return out
 
 def query_viewer(graph, query, num):
@@ -118,7 +179,7 @@ def query_viewer(graph, query, num):
     q.graph = graph
     q.credential_file = CRED
     q.url = GRIP + "/v1/graph/" + graph + "/query"
-    results = list(q.limit(10))
+    results = q.limit(10).execute(raw=True)
 
     columns = results_columns(results)
     data = results_data(results)
@@ -156,12 +217,12 @@ def query_viewer(graph, query, num):
     return card
 
 @app.callback(
-    Output('schema-graph', 'style'),
+    Output('schema-holder', 'style'),
     [Input('show-schema', 'n_clicks')])
 def toggle_container(toggle_value):
     #print(toggle_value, flush=True)
     if toggle_value % 2 == 0:
-        return {'display': 'block', 'width': '100%', 'height': '400px'}
+        return schema_holder_style
     else:
         return {'display': 'none'}
 
@@ -236,6 +297,7 @@ def update_output(n_clicks, result_delete, graph, query, results):
         if query_validate(query):
             o = query_viewer(graph, query, n_clicks)
         else:
+            print("Invalid query")
             return results
         if results is None:
             return [o]

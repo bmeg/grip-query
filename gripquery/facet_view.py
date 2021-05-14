@@ -5,23 +5,26 @@ import dash_html_components as html
 import dash_core_components as dcc
 from dash.dependencies import Input, Output, State, MATCH, ALL
 import dash_table
+import dash_bootstrap_components as dbc
 
 from .conn import connect
 
 def setup(graphs):
     return html.Div([
-        html.Div(
-            dcc.Dropdown(
-            id='facet-graph',
-            options=list( {"label":i, "value":i} for i in graphs ),
-            value=graphs[0]
-        )),
-        html.Div(
-            dcc.Dropdown(
-                id="facet-label",
-                options=[]
+        dbc.Row([
+            dbc.Col(
+                dcc.Dropdown(
+                id='facet-graph',
+                options=list( {"label":i, "value":i} for i in graphs ),
+                value=graphs[0]
+            )),
+            dbc.Col(
+                dcc.Dropdown(
+                    id="facet-label",
+                    options=[]
+                )
             )
-        ),
+        ]),
         dcc.Store(id="facet-store"),
         dcc.Store(id="facet-filters"),
         html.Div([
