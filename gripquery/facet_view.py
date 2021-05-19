@@ -77,10 +77,9 @@ def update_labels(graph):
 
 @app.callback(
     [Output("facet-store", "data"), Output("facet-table", "columns")],
-    [Input("facet-graph", "value"), Input("facet-label", "value")]
+    Input("facet-label", "value"), State("facet-graph", "value")
 )
-def update_facets(graph, label):
-    print("Updating %s %s" % (graph, label))
+def update_facets(label, graph):
     if label is None or graph is None:
         return {}, []
 
@@ -89,18 +88,27 @@ def update_facets(graph, label):
     schema = G.getSchema()
 
     columns = []
+    fieldType = {}
     fields = None
     for v in schema.get("vertices", []):
         if v["gid"] == label:
             fields = list(v["data"].keys())
             for f in fields:
-                columns.append({"name":f, "id":f})
+                t = v["data"][f]
+                if t in ["STRING", "BOOL"]:
+                    columns.append({"name":f, "id":f})
+                    fieldType[f] = t
     facets = {}
     if fields is not None:
-        for row in G.query().V().hasLabel(label).aggregate( list(gripql.term(f, f) for f in fields)  ):
+        for row in G.query().V().hasLabel(label).aggregate( list(gripql.term(f, f) for f in fieldType.keys())  ):
+            print(row)
             if row['name'] not in facets:
-                facets[row['name']] = {"index":len(facets), "options":[]}
-            facets[row['name']]['options'].append({"value":row['key'],"label":row['key']})
+                facets[row['name']] = {"index":len(facets), "options":[], "values":[], "type":fieldType[row['name']]}
+            i = len(facets[row['name']]["values"])
+            facets[row['name']]['options'].append({"value":i,"label":str(row['key'])})
+            facets[row['name']]['values'].append(row['key'])
+
+
     return facets, columns
 
 # the style arguments for the sidebar. We use position:fixed and a fixed width
@@ -115,6 +123,7 @@ SIDEBAR_STYLE = {
     "padding": "2rem 1rem",
     "background-color": "#f8f9fa",
 }
+
 
 @app.callback(
     Output("facet-div", "children"),
@@ -144,13 +153,15 @@ def update_view(data):
 @app.callback(
     Output("facet-table", "data"),
     [
-        Input("facet-graph", "value"),
-        Input("facet-label", "value"),
         Input({"type": "facet-selector", "index":ALL}, "value")
     ],
-    [State("facet-store", "data"),]
+    [
+        State("facet-store", "data"),
+        State("facet-graph", "value"),
+        State("facet-label", "value")
+    ]
 )
-def update_table(graph, label, facet_inputs, facets):
+def update_table(facet_inputs, facets, graph, label):
     if graph is not None and label is not None:
         conn = connect()
         G = conn.graph(graph)
@@ -159,7 +170,11 @@ def update_table(graph, label, facet_inputs, facets):
             for k, f in facets.items():
                 fi = facet_inputs[f['index']]
                 if len(fi):
-                    q = q.has(gripql.within(k, fi))
+                    fset = []
+                    # turn the dropdown selection numbers back into the original values
+                    for j in fi:
+                        fset.append(f['values'][j])
+                    q = q.has(gripql.within(k, fset))
         data = results_data(q)
         return data
     return []
