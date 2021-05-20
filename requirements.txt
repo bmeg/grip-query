@@ -1,0 +1,6 @@
+pyyaml
+git+https://github.com/bmeg/grip.git@develop-0.7.0#subdirectory=gripql/python
+dash
+dash-bootstrap-components
+dash-cytoscape
+networkx
