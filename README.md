@@ -24,7 +24,7 @@ grip create gdc
 
 Load GDC graph data
 ```
-grip load gdc --vertex TCGA-BRCA.json.vertices --edge TCGA-BRCA.json.edges
+grip load gdc --vertex TCGA-BRCA.vertices --edge TCGA-BRCA.edges
 ```
 
 Sample graph to get schema
