@@ -122,29 +122,32 @@ def query_view(text):
 
 
 def setup(graphs):
-    dialog =  dcc.Input(
+    dialog =  dcc.Textarea(
         id="query-text",
-        type="text",
-        size="120",
-        style={'fontSize':20}
+        style={'width': '100%', 'fontSize':20, "height":150}
     )
 
     return html.Div([
-        dbc.Row([
-            dbc.Col(
-                dcc.Dropdown(
-                id='query-graph',
-                options=list( {"label":i, "value":i} for i in graphs ),
-                value=graphs[0]
-            ), width=1),
-            dbc.Col(html.Div(dialog))
-        ]),
+        html.Div([
+            dbc.Row([
+                dbc.Col(
+                    dcc.Dropdown(
+                    id='query-graph',
+                    options=list( {"label":i, "value":i} for i in graphs ),
+                    value=graphs[0]
+                ), width=1),
+                dbc.Col(html.Div(dialog))
+            ])],
+            style={"margin-right" : "300px"},
+            id="query-holder"),
         html.Button('Run Query', id='submit-val', n_clicks=0),
         dcc.Store(id='schema-store'),
         html.Button('Show Schema', id='show-schema', n_clicks=0),
-        schemaGraph(),
-        #html.Div(id="query-parsed"),
-        html.Div(id="query-results"),
+        html.Div([
+            schemaGraph(),
+            #html.Div(id="query-parsed"),
+            html.Div(id="query-results",style={"margin-right":300}),
+        ])
     ])
 
 
@@ -188,6 +191,7 @@ def query_viewer(graph, query, num):
         id='table',
         columns=columns,
         data=data,
+        style_table={'overflowX': 'auto'},
     )
 
     card = dbc.Card(
