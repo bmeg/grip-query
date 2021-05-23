@@ -126,20 +126,27 @@ def setup(graphs):
 
     return html.Div([
         html.Div([
+            dbc.Row([                
+                dbc.Col(html.Div(dialog), width=11),
+                dbc.Col([
+                    dbc.Button(html.Span("play_arrow", className="material-icons"), color="primary", className="mb-3", id='submit-val', n_clicks=0),
+                    dbc.Button(html.Span("schema", className="material-icons"), color="primary", className="mb-3", id='show-schema', n_clicks=0),
+                ], width=1)
+            ]),
             dbc.Row([
-                dbc.Col(
-                    dcc.Dropdown(
+                dbc.Col(html.Span("Query Graph"), width=1),
+                dbc.Col(dcc.Dropdown(
                     id='query-graph',
                     options=list( {"label":i, "value":i} for i in graphs ),
                     value=graphs[0]
-                ), width=1),
-                dbc.Col(html.Div(dialog))
-            ])],
+                )),
+            ]),
+            ],
             style={"margin-right" : "300px"},
-            id="query-holder"),
-        html.Button('Run Query', id='submit-val', n_clicks=0),
+            id="query-holder"
+        ),
+        html.Hr(),
         dcc.Store(id='schema-store'),
-        html.Button('Show Schema', id='show-schema', n_clicks=0),
         html.Div([
             schemaGraph(),
             #html.Div(id="query-parsed"),
