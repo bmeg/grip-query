@@ -3,7 +3,11 @@ import dash_bootstrap_components as dbc
 from flask import Flask, send_from_directory
 import dash
 
-external_stylesheets = ['https://codepen.io/chriddyp/pen/bWLwgP.css', dbc.themes.BOOTSTRAP]
+external_stylesheets = [
+    'https://codepen.io/chriddyp/pen/bWLwgP.css', 
+    "https://fonts.googleapis.com/icon?family=Material+Icons",
+    dbc.themes.BOOTSTRAP
+]
 #external_stylesheets = [dbc.themes.BOOTSTRAP]
 
 server = Flask(__name__)

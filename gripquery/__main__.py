@@ -26,10 +26,13 @@ HOST="0.0.0.0"
 sidebar_header = dbc.Row(
     [
         dbc.Col(
-            html.Div(
-                "GRIP"
-            ),
+            [html.Div(
+                "GRIP",
             className="display-4"),
+            html.Div(
+                "GRaph Itegration Platform",
+            className="display-8")]
+        ),
         dbc.Col(
             [
                 html.Button(
@@ -85,7 +88,8 @@ sidebar = html.Div(
                     className="lead",
                     style={
                         'font-size': format_style('font_size_lg'),
-                        'fontFamily': format_style('font')
+                        'fontFamily': format_style('font'),
+                        'margin-top' : "20px"
                     },
                 ),
             ],

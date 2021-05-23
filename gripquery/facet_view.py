@@ -23,7 +23,16 @@ def setup(graphs):
                     id="facet-label",
                     options=[]
                 )
-            )
+            ),
+            
+            dbc.Col(
+                dbc.Button(
+                    html.Span("copy_all", className="material-icons"),
+                    id="query-toast-toggle",
+                    color="primary",
+                    className="mb-3",
+                ),
+            )            
         ]),
         dcc.Store(id="facet-store"),
         dcc.Store(id="facet-filters"),
@@ -41,7 +50,7 @@ def setup(graphs):
                     },
                     page_action="native",
                     page_current= 0,
-                    page_size= 50,
+                    page_size= 25,
                 ),
                 id="facet-table-div",
                 style={
@@ -54,11 +63,27 @@ def setup(graphs):
             style={
                 "height" : "100%"
             }
+        ),
+        dbc.Toast(
+            [html.Span("V()", id="query-copy-text")],
+            id="query-toast",
+            is_open=False,
+            header="GRIP Query",
+            dismissable=True,
+            style={"position": "fixed", "top": 20, "right": 10, "width": "50%"},
         )
         ], style={
         "height" : "100%"
     })
 
+
+@app.callback(
+    Output("query-toast", "is_open"),
+    [Input("query-toast-toggle", "n_clicks")],
+)
+def open_toast(n):
+    if n is not None:
+        return True
 
 @app.callback(
     Output('facet-label', "options"),
@@ -98,17 +123,24 @@ def update_facets(label, graph):
                 if t in ["STRING", "BOOL"]:
                     columns.append({"name":f, "id":f})
                     fieldType[f] = t
-    facets = {}
     if fields is not None:
+        facetAgg = {}
         for row in G.query().V().hasLabel(label).aggregate( list(gripql.term(f, f) for f in fieldType.keys())  ):
-            print(row)
-            if row['name'] not in facets:
-                facets[row['name']] = {"index":len(facets), "options":[], "values":[], "type":fieldType[row['name']]}
-            i = len(facets[row['name']]["values"])
-            facets[row['name']]['options'].append({"value":i,"label":str(row['key'])})
-            facets[row['name']]['values'].append(row['key'])
+            if row['name'] not in facetAgg:
+                facetAgg[row['name']] = {}
+            facetAgg[row['name']][row['key']] = row['value']
 
-
+        facets = {}
+        index = 0
+        for name, valueSet in facetAgg.items():
+            if len(valueSet) < 50:
+                values = []
+                options = []
+                for i, value in enumerate(valueSet):
+                    values.append(value)
+                    options.append({"value":i,"label":str(value)})
+                facets[name] = {"index":index, "options":options, "values":values}
+                index += 1
     return facets, columns
 
 # the style arguments for the sidebar. We use position:fixed and a fixed width
@@ -150,8 +182,26 @@ def update_view(data):
 
     return [html.Div(elements, style=SIDEBAR_STYLE)]
 
+# Not yet done, but covers use cases within this viewer
+def query_string(q):
+    d = q.to_dict()
+    elements = []
+    for q in d['query']:
+        #print(q)
+        if 'v' in q:
+            elements.append("V()")
+        elif 'hasLabel' in q:
+            elements.append("hasLabel(%s)" % (",".join( '"%s"' % i for i in q['hasLabel'])))
+        elif 'has' in q:
+            if q['has']['condition']['condition'] == "WITHIN":
+                values = ",".join( '"%s"' % i for i in q['has']['condition']['value'] )
+                elements.append( 'has( gripql.within("%s", [%s]) )' % (q['has']['condition']['key'],values ) )
+        else:
+            elements.append(str(q))
+    return ".".join(elements)
+
 @app.callback(
-    Output("facet-table", "data"),
+    [ Output("facet-table", "data"), Output("query-copy-text", "children") ],
     [
         Input({"type": "facet-selector", "index":ALL}, "value")
     ],
@@ -176,8 +226,8 @@ def update_table(facet_inputs, facets, graph, label):
                         fset.append(f['values'][j])
                     q = q.has(gripql.within(k, fset))
         data = results_data(q)
-        return data
-    return []
+        return data, query_string(q)
+    return [], "V()"
 
 def results_data(results):
     out = []
