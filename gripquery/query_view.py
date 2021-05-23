@@ -109,10 +109,7 @@ def query_parse(text):
         return out
     return None
 
-#@app.callback(
-#    Output("query-parsed", "children"),
-#    [Input("grip-query", "value")],
-#)
+
 def query_view(text):
     q = query_parse(text)
     if q is not None:
@@ -146,7 +143,7 @@ def setup(graphs):
         html.Div([
             schemaGraph(),
             #html.Div(id="query-parsed"),
-            html.Div(id="query-results",style={"margin-right":300}),
+            html.Div(id="query-results",style={"margin-right":"300px"}),
         ])
     ])
 
@@ -220,6 +217,8 @@ def query_viewer(graph, query, num):
     )
     return card
 
+# tried this one as a clientside_callback, but child elemnts like the cytoscape 
+# didn't update
 @app.callback(
     Output('schema-holder', 'style'),
     [Input('show-schema', 'n_clicks')])
@@ -229,6 +228,43 @@ def toggle_container(toggle_value):
         return schema_holder_style
     else:
         return {'display': 'none'}
+
+
+app.clientside_callback(
+    """
+    function(n_clicks) {
+        if (n_clicks % 2 == 0) {
+            return {
+                "margin-right" : "300px"
+            }
+        }
+        return {
+            "margin-right" : "0px"
+        }
+    }
+    """,
+    Output('query-results', 'style'),
+    Input('show-schema', 'n_clicks')
+)
+
+
+app.clientside_callback(
+    """
+    function(n_clicks) {
+        if (n_clicks % 2 == 0) {
+            return {
+                "margin-right" : "300px"
+            }
+        }
+        return {
+            "margin-right" : "0px"
+        }
+    }
+    """,
+    Output('query-holder', 'style'),
+    Input('show-schema', 'n_clicks')
+)
+
 
 @app.callback(
     Output('schema-graph', 'elements'),
