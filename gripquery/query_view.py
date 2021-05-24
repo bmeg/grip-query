@@ -8,17 +8,25 @@ import dash_html_components as html
 import dash_cytoscape as cyto
 import dash_table
 
-from gripquery.render import parsePartialQuery, schemaGraphColor
+from gripquery.render import parsePartialQuery, schemaGraphColor, parseQuery, validateQuery, queryOutLabel, schemaToGraph, queryContinuePath
 import dash
 import gripql
 from .conn import connect, GRIP, CRED
 
 base_cyto_stylesheet = [
-     {
+    {
         'selector': 'node',
         'style': {
             'content': 'data(label)'
         }
+    },
+    {
+       'selector': 'edge',
+       'style': {
+           'content': 'data(label)',
+           'target-arrow-shape': 'vee',
+           'curve-style': 'bezier'
+       }
     },
     {
         'selector': '.red',
@@ -52,72 +60,6 @@ def schemaGraph():
         id="schema-holder"
     )
 
-class gripStub:
-    def and_(self, *args, **kwargs):
-        return gripql.and_(*args, **kwargs)
-    def or_(self, *args, **kwargs):
-        return gripql.or_(*args, **kwargs)
-    def not_(self, *args, **kwargs):
-        return gripql.not_(*args, **kwargs)
-    def eq(self, *args, **kwargs):
-        return gripql.eq(*args, **kwargs)
-    def neq(self, *args, **kwargs):
-        return gripql.neq(*args, **kwargs)
-    def gt(self, *args, **kwargs):
-        return gripql.gt(*args, **kwargs)
-    def gte(self, *args, **kwargs):
-        return gripql.gte(*args, **kwargs)
-    def lt(self, *args, **kwargs):
-        return gripql.lt(*args, **kwargs)
-    def lte(self, *args, **kwargs):
-        return gripql.lte(*args, **kwargs)
-    def inside(self, *args, **kwargs):
-        return gripql.inside(*args, **kwargs)
-    def outside(self, *args, **kwargs):
-        return gripql.outside(*args, **kwargs)
-    def between(self, *args, **kwargs):
-        return gripql.between(*args, **kwargs)
-    def within(self, *args, **kwargs):
-        return gripql.within(*args, **kwargs)
-    def without(self, *args, **kwargs):
-        return gripql.without(*args, **kwargs)
-    def contains(self, *args, **kwargs):
-        return gripql.contains(*args, **kwargs)
-    def term(self, *args, **kwargs):
-        return gripql.term(*args, **kwargs)
-    def histogram(self, *args, **kwargs):
-        return gripql.histogram(*args, **kwargs)
-    def percentil(self, *args, **kwargs):
-        return gripql.percentil(*args, **kwargs)
-
-def query_validate(text):
-    try:
-        out = eval(str(text), {"V": gripql.query.Query(url="", graph="test").V, "gripql" : gripStub()}, {})
-    except Exception as e:
-        print(e)
-        return False
-    if isinstance(out, gripql.query.Query):
-        return True
-    return False
-
-def query_parse(text):
-    try:
-        out = eval(str(text), {"V": gripql.query.Query(url="", graph="test").V, "gripql" : gripStub()}, {})
-    except:
-        return None
-    if isinstance(out, gripql.query.Query):
-        return out
-    return None
-
-
-def query_view(text):
-    q = query_parse(text)
-    if q is not None:
-        return html.Div(q.to_json())
-    return html.Div("")
-
-
-
 def setup(graphs):
     dialog =  dcc.Textarea(
         id="query-text",
@@ -126,11 +68,11 @@ def setup(graphs):
 
     return html.Div([
         html.Div([
-            dbc.Row([                
+            dbc.Row([
                 dbc.Col(html.Div(dialog), width=11),
                 dbc.Col([
-                    dbc.Button(html.Span("play_arrow", className="material-icons"), color="primary", className="mb-3", id='submit-val', n_clicks=0),
-                    dbc.Button(html.Span("schema", className="material-icons"), color="primary", className="mb-3", id='show-schema', n_clicks=0),
+                    dbc.Button(html.Span("play_arrow", className="material-icons"), color="primary", className="mb-3", id='submit-val', n_clicks=0, style={"margin":"5px"}),
+                    dbc.Button(html.Span("schema", className="material-icons"), color="primary", className="mb-3", id='show-schema', n_clicks=0, style={"margin":"5px"}),
                 ], width=1)
             ]),
             dbc.Row([
@@ -146,6 +88,7 @@ def setup(graphs):
             id="query-holder"
         ),
         html.Hr(),
+        html.Div(id="cytoscape-tapNodeData-json"),
         dcc.Store(id='schema-store'),
         html.Div([
             schemaGraph(),
@@ -181,7 +124,7 @@ def results_data(results):
 
 def query_viewer(graph, query, num):
     conn = connect()
-    q = query_parse(query)
+    q = parseQuery(query)
     q.base_url = GRIP
     q.graph = graph
     q.credential_file = CRED
@@ -209,13 +152,13 @@ def query_viewer(graph, query, num):
                     dbc.Button("Delete", id={
                         "type" : "result-card-delete",
                         "index" : num
-                    }, color="primary"),
+                    }, color="primary", style={"margin-top":"15px"}),
                 ]
             ),
         ],
         style={"width": "100%"},
-        #outline=True,
-        color="primary",
+        outline=True,
+        #color="secondary",
         id={
             "type" : "result-card",
             "index": num
@@ -224,7 +167,7 @@ def query_viewer(graph, query, num):
     )
     return card
 
-# tried this one as a clientside_callback, but child elemnts like the cytoscape 
+# tried this one as a clientside_callback, but child elemnts like the cytoscape
 # didn't update
 @app.callback(
     Output('schema-holder', 'style'),
@@ -285,7 +228,7 @@ def schema_render(schema):
             o.append(t)
     if 'edges' in schema:
         for i in schema['edges']:
-            t = {"data":{"source":i['from'], "target":i['to']}}
+            t = {"data":{"source":i['from'], "target":i['to'], "label":i["label"]}}
             o.append(t)
     return o
 
@@ -328,6 +271,22 @@ def schema_load(graph):
             o['edges'].append({"from":i["from"], "to":i['to'], "label":i["label"]})
     return o
 
+@app.callback(Output("query-text", "value"),
+              Input('schema-graph', 'tapNodeData'),
+              [State("query-text", "value"), State("schema-store", "data")])
+def displayTapNodeData(data, query, schema):
+    if (query is None or query.strip() == "") and data is not None:
+        return 'V().hasLabel("%s")' % (data["label"])
+    if data is not None:
+        q = parseQuery(query)
+        if q is not None:
+            g = schemaToGraph(schema)
+            oLabel = queryOutLabel(g, q)
+            if oLabel is not None:
+                queryExtend = queryContinuePath(g, oLabel, data["label"])
+                return query + queryExtend
+    return query
+
 
 @app.callback(
     Output('query-results', 'children'),
@@ -341,7 +300,7 @@ def update_output(n_clicks, result_delete, graph, query, results):
         button_id = ctx.triggered[0]['prop_id'].split('.')[0]
 
     if button_id == "submit-val":
-        if query_validate(query):
+        if validateQuery(query):
             o = query_viewer(graph, query, n_clicks)
         else:
             print("Invalid query")
