@@ -108,7 +108,7 @@ def results_columns(results):
             if isinstance(row['render'], dict):
                 c.update(list(row['render'].keys()))
         else:
-            print("Unknown type")
+            print("Unknown type: %s" % (",".join(list(row.keys()))))
     return list( {"name":i, "id": i} for i in c )
 
 def results_data(results):

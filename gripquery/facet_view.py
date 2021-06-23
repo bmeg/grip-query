@@ -24,7 +24,7 @@ def setup(graphs):
                     options=[]
                 )
             ),
-            
+
             dbc.Col(
                 dbc.Button(
                     html.Span("copy_all", className="material-icons"),
@@ -32,7 +32,7 @@ def setup(graphs):
                     color="primary",
                     className="mb-3",
                 ),
-            )            
+            )
         ]),
         dcc.Store(id="facet-store"),
         dcc.Store(id="facet-filters"),
@@ -123,6 +123,11 @@ def update_facets(label, graph):
                 if t in ["STRING", "BOOL"]:
                     columns.append({"name":f, "id":f})
                     fieldType[f] = t
+                elif t in ["NUMERIC"]:
+                    columns.append({"name":f, "id":f})
+                    fieldType[f] = t
+                else:
+                    print("type", f, t)
     if fields is not None:
         facetAgg = {}
         for row in G.query().V().hasLabel(label).aggregate( list(gripql.term(f, f) for f in fieldType.keys())  ):
@@ -133,13 +138,13 @@ def update_facets(label, graph):
         facets = {}
         index = 0
         for name, valueSet in facetAgg.items():
-            if len(valueSet) < 50:
+            if fieldType[name] == "NUMERIC" or len(valueSet) < 50:
                 values = []
                 options = []
                 for i, value in enumerate(valueSet):
                     values.append(value)
                     options.append({"value":i,"label":str(value)})
-                facets[name] = {"index":index, "options":options, "values":values}
+                facets[name] = {"index":index, "options":options, "values":values, "type":fieldType[name]}
                 index += 1
     return facets, columns
 
@@ -168,17 +173,36 @@ def update_view(data):
     elements = []
 
     for k, v in data.items():
-        a = html.Div([
-            html.P("%s:" % (k)),
-            dcc.Dropdown(id = {"type":'facet-selector', "index":v["index"]},
-                options = v["options"],
-                value = [],
-                multi = True,
-                style = {'font-size': '13px', 'color' : 'medium-blue-grey', 'white-space': 'nowrap', 'text-overflow': 'ellipsis'}
-            )],
-            style={"margin":"5px"}
-        )
-        elements.append(a)
+        if v["type"] == "NUMERIC":
+            print("NUMERIC", v["values"])
+            m = max(v["values"])
+            n = min(v["values"])
+            s = (m - n) / 100
+            a = html.Div([
+                html.P("%s:" % (k)),
+                dcc.RangeSlider(
+                    id={"type":'facet-selector', "index":v["index"]},
+                    min=n,
+                    max=m,
+                    value=[n, m],
+                    marks={n:str(n), m:str(m)},
+                    step=s
+                )],
+                style={"margin":"5px"}
+            )
+            elements.append(a)
+        else:
+            a = html.Div([
+                html.P("%s:" % (k)),
+                dcc.Dropdown(id = {"type":'facet-selector', "index":v["index"]},
+                    options = v["options"],
+                    value = [],
+                    multi = True,
+                    style = {'font-size': '13px', 'color' : 'medium-blue-grey', 'white-space': 'nowrap', 'text-overflow': 'ellipsis'}
+                )],
+                style={"margin":"5px"}
+            )
+            elements.append(a)
 
     return [html.Div(elements, style=SIDEBAR_STYLE)]
 
@@ -212,19 +236,21 @@ def query_string(q):
     ]
 )
 def update_table(facet_inputs, facets, graph, label):
+    print("Facet inputs", facet_inputs, facets)
     if graph is not None and label is not None:
         conn = connect()
         G = conn.graph(graph)
         q = G.query().V().hasLabel(label)
         if len(facet_inputs):
             for k, f in facets.items():
-                fi = facet_inputs[f['index']]
-                if len(fi):
-                    fset = []
-                    # turn the dropdown selection numbers back into the original values
-                    for j in fi:
-                        fset.append(f['values'][j])
-                    q = q.has(gripql.within(k, fset))
+                if f['type'] in ["STRING", "BOOL"]:
+                    fi = facet_inputs[f['index']]
+                    if len(fi):
+                        fset = []
+                        # turn the dropdown selection numbers back into the original values
+                        for j in fi:
+                            fset.append(f['values'][j])
+                        q = q.has(gripql.within(k, fset))
         data = results_data(q)
         return data, query_string(q)
     return [], "V()"
