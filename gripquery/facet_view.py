@@ -252,6 +252,11 @@ def query_string(q):
             if q['has']['condition']['condition'] == "WITHIN":
                 values = ",".join( '"%s"' % i for i in q['has']['condition']['value'] )
                 elements.append( 'has( gripql.within("%s", [%s]) )' % (q['has']['condition']['key'],values ) )
+            elif q['has']['condition']['condition'] == "INSIDE":
+                values = q['has']['condition']['value']
+                elements.append( 'has( gripql.inside("%s", [%s,%s]) )' % (q['has']['condition']['key'], values[0], values[1] ) )
+            else:
+                print(q['has']['condition'])
         else:
             elements.append(str(q))
     return ".".join(elements)
