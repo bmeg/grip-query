@@ -77,6 +77,7 @@ def setup(graphs):
     })
 
 
+## Toggle the query view 'toast' element on and off
 @app.callback(
     Output("query-toast", "is_open"),
     [Input("query-toast-toggle", "n_clicks")],
@@ -85,6 +86,7 @@ def open_toast(n):
     if n is not None:
         return True
 
+# given the selected graph, return a list of vertex labels
 @app.callback(
     Output('facet-label', "options"),
     Input("facet-graph", "value")
@@ -96,7 +98,7 @@ def update_labels(graph):
     G = c.graph(graph)
     o = G.listLabels()
     if "vertexLabels" in o:
-        return list( {"label":i, "value":i} for i in o["vertexLabels"] )
+        return list( {"label":i, "value":i} for i in sorted(o["vertexLabels"]) )
     return []
 
 
@@ -133,12 +135,19 @@ def update_facets(label, graph):
         for row in G.query().V().hasLabel(label).aggregate( list(gripql.term(f, f) for f in fieldType.keys())  ):
             if row['name'] not in facetAgg:
                 facetAgg[row['name']] = {}
-            facetAgg[row['name']][row['key']] = row['value']
+            if fieldType[row['name']] == "NUMERIC":
+                facetAgg[row['name']]['min'] = min(facetAgg[row['name']].get('min', row['key']), row['key'])
+                facetAgg[row['name']]['max'] = max(facetAgg[row['name']].get('max', row['key']), row['key'])
+            else:
+                facetAgg[row['name']][row['key']] = row['value']
 
         facets = {}
         index = 0
         for name, valueSet in facetAgg.items():
-            if fieldType[name] == "NUMERIC" or len(valueSet) < 50:
+            if fieldType[name] == "NUMERIC":
+                facets[name] = {"index":index, "values":facetAgg[name], "type":fieldType[name]}
+                index += 1
+            elif len(valueSet) < 50:
                 values = []
                 options = []
                 for i, value in enumerate(valueSet):
@@ -146,6 +155,7 @@ def update_facets(label, graph):
                     options.append({"value":i,"label":str(value)})
                 facets[name] = {"index":index, "options":options, "values":values, "type":fieldType[name]}
                 index += 1
+    print("facets", facets)
     return facets, columns
 
 # the style arguments for the sidebar. We use position:fixed and a fixed width
@@ -155,7 +165,7 @@ SIDEBAR_STYLE = {
     "top": 0,
     "left": 0,
     "bottom": 0,
-    "width": "20rem",
+    "width": "30rem",
     "height" : "100%",
     "padding": "2rem 1rem",
     "background-color": "#f8f9fa",
@@ -175,26 +185,37 @@ def update_view(data):
     for k, v in data.items():
         if v["type"] == "NUMERIC":
             print("NUMERIC", v["values"])
-            m = max(v["values"])
-            n = min(v["values"])
+            m = v["values"]["max"]
+            n = v["values"]["min"]
             s = (m - n) / 100
+
             a = html.Div([
-                html.P("%s:" % (k)),
-                dcc.RangeSlider(
-                    id={"type":'facet-selector', "index":v["index"]},
-                    min=n,
-                    max=m,
-                    value=[n, m],
-                    marks={n:str(n), m:str(m)},
-                    step=s
-                )],
+                dbc.Checklist(
+                    options=[
+                        {"label": k, "value": 0},
+                    ],
+                    value=[],
+                    id={"type":'facet-range-switch', "index":v["index"]},
+                    switch=True,
+                ),
+                dcc.Input(id={"type":'facet-min', "index":v["index"]}, type="number", min=n, max=m, value=n, debounce=True, disabled=True, style={'width':'10rem'}),
+                dcc.Input(id={"type":'facet-max', "index":v["index"]}, type="number", min=n, max=m, value=m, debounce=True, disabled=True, style={'width':'10rem'}),
+                ],
+                #dcc.RangeSlider(
+                #    id={"type":'facet-selector', "index":v["index"]},
+                #    min=n,
+                #    max=m,
+                #    value=[n, m],
+                #    marks={n:str(n), m:str(m)},
+                #    step=s
+                #)],
                 style={"margin":"5px"}
             )
             elements.append(a)
         else:
             a = html.Div([
                 html.P("%s:" % (k)),
-                dcc.Dropdown(id = {"type":'facet-selector', "index":v["index"]},
+                dcc.Dropdown(id = {"type":'facet-dropdown', "index":v["index"]},
                     options = v["options"],
                     value = [],
                     multi = True,
@@ -206,6 +227,17 @@ def update_view(data):
 
     return [html.Div(elements, style=SIDEBAR_STYLE)]
 
+
+@app.callback(
+    [Output({"type":"facet-min", "index":MATCH}, "disabled"),Output({"type":"facet-max", "index":MATCH}, "disabled")],
+    Input({"type": "facet-range-switch", "index":MATCH}, "value")
+)
+def toggle_range(value):
+    if len(value):
+        return [False, False]
+    return [True,True]
+
+# turn query data structure into human readable string
 # Not yet done, but covers use cases within this viewer
 def query_string(q):
     d = q.to_dict()
@@ -227,21 +259,31 @@ def query_string(q):
 @app.callback(
     [ Output("facet-table", "data"), Output("query-copy-text", "children") ],
     [
-        Input({"type": "facet-selector", "index":ALL}, "value")
+        Input({"type": "facet-dropdown", "index":ALL}, "value"),
+        Input({"type": "facet-range-switch", "index":ALL}, "value"),
+        Input({"type": "facet-min", "index":ALL}, "value"),
+        Input({"type": "facet-max", "index":ALL}, "value"),
     ],
     [
+        State({"type": "facet-dropdown", "index":ALL}, "id"),
+        State({"type": "facet-min", "index":ALL}, "id"),
         State("facet-store", "data"),
         State("facet-graph", "value"),
         State("facet-label", "value")
     ]
 )
-def update_table(facet_inputs, facets, graph, label):
-    print("Facet inputs", facet_inputs, facets)
+def update_table(facet_dropdown, facet_range, facet_min, facet_max, dropdown_id, min_id, facets, graph, label):
+    print("Facet inputs", facet_dropdown, facet_range, facet_min, facet_max)
+    facet_inputs = {}
+    for f, v in zip(dropdown_id, facet_dropdown):
+        facet_inputs[f['index']] = v
+    for f, s, n, m in zip(min_id, facet_range, facet_min, facet_max):
+        facet_inputs[f['index']] = [s, n, m]
     if graph is not None and label is not None:
         conn = connect()
         G = conn.graph(graph)
         q = G.query().V().hasLabel(label)
-        if len(facet_inputs):
+        if len(facet_dropdown):
             for k, f in facets.items():
                 if f['type'] in ["STRING", "BOOL"]:
                     fi = facet_inputs[f['index']]
@@ -251,6 +293,9 @@ def update_table(facet_inputs, facets, graph, label):
                         for j in fi:
                             fset.append(f['values'][j])
                         q = q.has(gripql.within(k, fset))
+                elif f["type"] == "NUMERIC":
+                    if len(facet_inputs[f['index']][0]) > 0:
+                        q = q.has(gripql.inside(k, facet_inputs[f['index']][1], facet_inputs[f['index']][2]))
         data = results_data(q)
         return data, query_string(q)
     return [], "V()"
@@ -263,13 +308,3 @@ def results_data(results):
             r[k] = str(v)
         out.append(r)
     return out
-
-
-#@app.callback(
-#    Output("facet-filters", "data"),
-#    Input({"type": "facet-selector", "index":ALL}, "value"),
-#    State("facet-store", "data")
-#)
-#def update_filters(facets, facet_data):
-#    print("Selected filters: %s %s" % (facets, facet_data))
-#    return {}
