@@ -96,9 +96,12 @@ def update_labels(graph):
         return []
     c = connect()
     G = c.graph(graph)
-    o = G.listLabels()
-    if "vertexLabels" in o:
-        return list( {"label":i, "value":i} for i in sorted(o["vertexLabels"]) )
+    try:
+        o = G.listLabels()
+        if "vertexLabels" in o:
+            return list( {"label":i, "value":i} for i in sorted(o["vertexLabels"]) )
+    except:
+        pass
     return []
 
 

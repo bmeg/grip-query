@@ -61,6 +61,7 @@ def schemaGraph():
     )
 
 def setup(graphs):
+    graphs = sorted(graphs)
     dialog =  dcc.Textarea(
         id="query-text",
         style={'width': '100%', 'fontSize':20, "height":150}

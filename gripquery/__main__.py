@@ -16,12 +16,15 @@ from flask import Flask, send_from_directory
 from . import conn
 from . import query_view
 from . import facet_view
+from . import manager_view
+
 from .style import format_style
 from .app import app
 
 PORT="8050"
 HOST="0.0.0.0"
 
+VIEWS = []
 
 sidebar_header = dbc.Row(
     [
@@ -62,7 +65,8 @@ sidebar_header = dbc.Row(
 
 def genNavBarList():
     out = []
-    for k, v in [ ("query","Query"), ("facet","Facet View") ]:
+
+    for k, v, f in VIEWS:
         e = dbc.NavLink(
             v,
             href="/%s" % (k),
@@ -76,42 +80,42 @@ def genNavBarList():
     return out
 
 
-
-sidebar = html.Div(
-    [
-        sidebar_header,
-        html.Div(
-            [
-                html.Hr(),
-                html.P(
-                    "Tools",
-                    className="lead",
-                    style={
-                        'font-size': format_style('font_size_lg'),
-                        'fontFamily': format_style('font'),
-                        'margin-top' : "20px"
-                    },
-                ),
-            ],
-            id="blurb",
-        ),
-        dbc.Collapse(
-            dbc.Nav(
-                genNavBarList(),
-                vertical=True,
-                pills=True,
+def genSideBar():
+    return html.Div(
+        [
+            sidebar_header,
+            html.Div(
+                [
+                    html.Hr(),
+                    html.P(
+                        "Tools",
+                        className="lead",
+                        style={
+                            'font-size': format_style('font_size_lg'),
+                            'fontFamily': format_style('font'),
+                            'margin-top' : "20px"
+                        },
+                    ),
+                ],
+                id="blurb",
             ),
-            id="collapse",
-        ),
-    ],
-    id="sidebar",
-)
+            dbc.Collapse(
+                dbc.Nav(
+                    genNavBarList(),
+                    vertical=True,
+                    pills=True,
+                ),
+                id="collapse",
+            ),
+        ],
+        id="sidebar",
+    )
 
 
 
 def app_setup():
     content = html.Div(id="page-content")
-    app.layout = html.Div([dcc.Location(id="url"), sidebar, content])
+    app.layout = html.Div([dcc.Location(id="url"), genSideBar(), content])
 
 
     #app.layout = html.Div([dcc.Location(id="url"),navbar(),content]) #,query_view.setup(graphs)])
@@ -129,10 +133,11 @@ def render_page_content(pathname):
         if not i.endswith("__schema__"):
             graphs.append(i)
 
-    if pathname == "/" or pathname == "/query":
-        return query_view.setup(graphs)
-    elif pathname == "/facet":
-        return facet_view.setup(graphs)
+    if pathname == "/":
+        return VIEWS[0][2](graphs)
+    for path, name, setupFunc in VIEWS:
+        if pathname == "/" + path:
+            return setupFunc(graphs)
 
     return dbc.Jumbotron(
         [
@@ -174,11 +179,21 @@ if __name__ == '__main__':
     parser.add_argument("-g", "--grip", default=conn.GRIP)
     parser.add_argument("-c", "--cred", default=conn.CRED)
 
+    parser.add_argument("--use-manager", action="store_true", default=False)
+
     args = parser.parse_args()
     HOST = args.host
     PORT = args.port
     conn.GRIP = args.grip
     conn.CRED = args.cred
+
+    VIEWS = []
+
+    if args.use_manager:
+        VIEWS.append(("manager","Manager", manager_view.setup))
+
+    VIEWS.append(("query","Query", query_view.setup))
+    VIEWS.append(("facet","Facet View", facet_view.setup))
 
     app_setup()
 
