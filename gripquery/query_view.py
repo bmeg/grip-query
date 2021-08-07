@@ -81,7 +81,7 @@ def setup(graphs):
                 dbc.Col(dcc.Dropdown(
                     id='query-graph',
                     options=list( {"label":i, "value":i} for i in graphs ),
-                    value=graphs[0]
+                    value=graphs[0] if len(graphs) else None
                 )),
             ]),
             ],
@@ -223,6 +223,8 @@ app.clientside_callback(
 )
 def schema_render(schema):
     o = []
+    if schema is None:
+        return o
     if 'vertices' in schema:
         for i in schema['vertices']:
             t = {"data": {"id":i['gid'], "label": i['gid']}}
@@ -258,6 +260,8 @@ def schema_style(query, schema):
     [Input('query-graph', 'value')]
 )
 def schema_load(graph):
+    if graph is None:
+        return None
     G = gripql.Graph(GRIP, credential_file=CRED, graph=graph)
     o = {'vertices' : [], 'edges' : []}
     try:

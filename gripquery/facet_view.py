@@ -16,7 +16,7 @@ def setup(graphs):
                 dcc.Dropdown(
                 id='facet-graph',
                 options=list( {"label":i, "value":i} for i in graphs ),
-                value=graphs[0]
+                value=graphs[0] if len(graphs) else None
             )),
             dbc.Col(
                 dcc.Dropdown(
