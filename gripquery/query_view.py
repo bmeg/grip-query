@@ -108,6 +108,8 @@ def results_columns(results):
         elif 'render' in row:
             if isinstance(row['render'], dict):
                 c.update(list(row['render'].keys()))
+        elif 'count' in row:
+            c.add("count")
         else:
             print("Unknown type: %s" % (",".join(list(row.keys()))))
     return list( {"name":i, "id": i} for i in c )
@@ -121,6 +123,8 @@ def results_data(results):
                 for k, v in row['vertex']['data'].items():
                     r[k] = str(v)
                 out.append(r)
+        elif 'count' in row:
+            out.append({"count": row["count"]})
     return out
 
 def query_viewer(graph, query, num):
